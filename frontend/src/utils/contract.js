@@ -1,7 +1,7 @@
 import { Contract, BrowserProvider } from "ethers";
 import NFTMarketplace from "../constants/NFTMarketplace.json";
 
-const CONTRACT_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+const CONTRACT_ADDRESS = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318";
 
 // Tambahkan guard flag di luar fungsi
 let isRequestingAccounts = false;
