@@ -20,24 +20,7 @@ export default function Mint() {
 
       const [tokenIds, sellers, prices] = await contract.getAvailableNFTs();
 
-      if (
-        !Array.isArray(tokenIds) ||
-        !Array.isArray(sellers) ||
-        !Array.isArray(prices)
-      ) {
-        setMyNFTs([]);
-        return;
-      }
-
-      if (
-        tokenIds.length !== sellers.length ||
-        tokenIds.length !== prices.length
-      ) {
-        console.error("Data token tidak konsisten:", {
-          tokenIds,
-          sellers,
-          prices,
-        });
+      if (!Array.isArray(tokenIds)) {
         setMyNFTs([]);
         return;
       }
@@ -52,20 +35,15 @@ export default function Mint() {
         const tokenId = tokenIds[idx];
 
         try {
-          // Cek apakah token benar-benar ada
           const owner = await contract.ownerOf(tokenId);
 
-          if (
-            !owner ||
-            owner.toLowerCase() === "0x0000000000000000000000000000000000000000"
-          ) {
+          // Hanya push jika pemiliknya user saat ini
+          if (owner.toLowerCase() !== userAddress.toLowerCase()) {
             continue;
           }
 
           const tokenURI = await contract.tokenURI(tokenId);
           const metadata = await fetchMetadata(tokenURI);
-
-          const isUserOwner = owner.toLowerCase() === userAddress.toLowerCase();
 
           ownedNFTs.push({
             tokenId: tokenId.toString(),
@@ -74,11 +52,11 @@ export default function Mint() {
             image: metadata.image,
             price: ethers.formatEther(prices[idx].toString()),
             seller: sellers[idx],
-            isOwner: isUserOwner,
+            isOwner: true,
           });
         } catch (err) {
           console.warn(
-            "Gagal ambil data token:",
+            "Token ID tidak valid:",
             tokenId.toString(),
             err.message
           );
@@ -90,10 +68,8 @@ export default function Mint() {
     } catch (err) {
       console.error("Gagal memuat NFT:", err);
       alert("Gagal memuat NFT: " + err.message);
-      setMyNFTs([]);
     }
   };
-
   const fetchMetadata = async (tokenURI) => {
     if (tokenURI.startsWith("data:")) {
       const base64Data = tokenURI.split(",")[1];
@@ -105,55 +81,104 @@ export default function Mint() {
     }
   };
 
+  // Setup event listener untuk notifikasi pembelian
   useEffect(() => {
-    loadMyNFTs();
+    const setupEventListeners = async () => {
+      try {
+        const contract = await getContract();
+
+        contract.on("NFTBought", (tokenId, buyer, seller, price, event) => {
+          const formattedPrice = ethers.formatEther(price.toString());
+          alert(
+            `🎉 NFT #${tokenId} telah terjual kepada ${buyer} seharga ${formattedPrice} ETH`
+          );
+          loadMyNFTs(); // refresh daftar NFT
+        });
+      } catch (err) {
+        console.error("Gagal setup listener:", err);
+      }
+    };
+
+    setupEventListeners();
+
+    return () => {
+      const removeListeners = async () => {
+        const c = await getContract();
+        c.removeAllListeners("NFTBought");
+      };
+      removeListeners();
+    };
+  }, []);
+
+  useEffect(() => {
+    const setupEventListeners = async () => {
+      const contract = await getContract();
+      contract.on("NFTBought", (tokenId, buyer, seller, price) => {
+        alert(`NFT #${tokenId} terjual`);
+        loadMyNFTs(); // refresh list
+      });
+    };
+
+    setupEventListeners();
+
+    return () => {
+      const removeListeners = async () => {
+        const contract = await getContract();
+        contract.removeAllListeners("NFTBought");
+      };
+      removeListeners();
+    };
   }, []);
 
   const mintAndListNFT = async () => {
-  if (!name || !imageFile || !price) return alert("Lengkapi nama, harga, dan pilih gambar");
+    if (!name || !imageFile || !price)
+      return alert("Lengkapi nama, harga, dan pilih gambar");
 
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    // Upload gambar ke IPFS
-    const imageIPFSUrl = await uploadImageToIPFS(imageFile);
+      // Upload gambar ke IPFS
+      const imageIPFSUrl = await uploadImageToIPFS(imageFile);
 
-    // Buat metadata NFT
-    const metadata = {
-      name,
-      description,
-      image: imageIPFSUrl
-    };
+      // Buat metadata NFT
+      const metadata = {
+        name,
+        description,
+        image: imageIPFSUrl,
+      };
 
-    const metadataURI = "data:application/json;base64," + btoa(JSON.stringify(metadata));
+      const metadataURI =
+        "data:application/json;base64," + btoa(JSON.stringify(metadata));
 
-    const contract = await getContract();
-    
-    // Mint NFT
-    const txMint = await contract.mint(metadataURI);
-    const receipt = await txMint.wait(); // ⚠️ PASTIKAN INI SELESAI
+      const contract = await getContract();
 
-    // Ambil tokenId dari event Transfer
-    const transferEvent = receipt.logs.find(log => log.fragment?.name === 'Transfer');
-    if (!transferEvent) throw new Error("Transfer event tidak ditemukan");
+      // Mint NFT
+      const txMint = await contract.mint(metadataURI);
+      const receipt = await txMint.wait();
 
-    const tokenId = transferEvent.args[2]; // tokenId adalah argumen ke-3
+      // Ambil tokenId dari event Transfer
+      const transferEvent = receipt.logs?.find(
+        (log) => log.fragment?.name === "Transfer"
+      );
+      if (!transferEvent) throw new Error("Transfer event tidak ditemukan");
 
-    // List NFT dengan harga
-    const priceInWei = ethers.parseEther(price);
-    const txList = await contract.listItem(tokenId, priceInWei);
-    await txList.wait();
+      const tokenId = transferEvent.args[2]; // tokenId adalah argumen ke-3
 
-    alert("NFT berhasil di-mint dan ditawarkan!");
-    resetForm();
-    await loadMyNFTs();
-  } catch (err) {
-    console.error(err);
-    alert("Gagal mint NFT: " + err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+      // List NFT dengan harga
+      const priceInWei = ethers.parseEther(price);
+      const txList = await contract.listItem(tokenId, priceInWei);
+      await txList.wait();
+
+      alert("NFT berhasil di-mint dan ditawarkan!");
+      resetForm();
+      await loadMyNFTs();
+    } catch (err) {
+      console.error(err);
+      alert("Gagal mint NFT: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const updateListingPrice = async (tokenId) => {
     if (!editPrice) return alert("Masukkan harga baru");
@@ -279,69 +304,65 @@ export default function Mint() {
               <img
                 src={nft.image}
                 alt={nft.name}
-                className="w-full h-48 object-cover mb-2 rounded"
+                className="w-full h-48 object-cover mb-2"
               />
               <h3 className="font-bold">{nft.name}</h3>
               <p className="text-sm text-gray-600 mb-1">{nft.description}</p>
               <p className="font-semibold">{nft.price} ETH</p>
 
-              {nft.isOwner ? (
-                editingId === nft.tokenId ? (
-                  <div className="mt-2">
-                    <input
-                      type="number"
-                      placeholder="Harga Baru"
-                      className="w-full p-2 border rounded mb-2"
-                      value={editPrice}
-                      onChange={(e) => setEditPrice(e.target.value)}
-                      step="0.01"
-                      min="0"
-                    />
-                    <button
-                      onClick={() => updateListingPrice(nft.tokenId)}
-                      className="bg-blue-500 text-white py-1 px-3 rounded mr-2"
-                    >
-                      Simpan
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      className="bg-gray-500 text-white py-1 px-3 rounded"
-                    >
-                      Batal
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-2">
-                    <button
-                      onClick={() => {
-                        setEditingId(nft.tokenId);
-                        setEditPrice(nft.price);
-                      }}
-                      className="bg-yellow-500 text-white py-1 px-3 rounded mr-2"
-                    >
-                      Edit Harga
-                    </button>
-                    <button
-                      onClick={() => cancelListing(nft.tokenId)}
-                      className="bg-red-500 text-white py-1 px-3 rounded"
-                    >
-                      Batalkan Penjualan
-                    </button>
-                  </div>
-                )
-              ) : (
-                <button
-                  onClick={() => buyNFT(nft.tokenId, nft.price)}
-                  className="bg-green-500 text-white py-1 px-3 rounded mt-2"
-                >
-                  Beli NFT
-                </button>
+              {/* Tombol Edit dan Batalkan Listing */}
+              {nft.isOwner && (
+                <div className="mt-2 space-y-2">
+                  {editingId === nft.tokenId ? (
+                    <>
+                      <input
+                        type="number"
+                        placeholder="Harga Baru"
+                        className="w-full p-2 border rounded"
+                        value={editPrice}
+                        onChange={(e) => setEditPrice(e.target.value)}
+                        step="0.01"
+                        min="0"
+                      />
+                      <button
+                        onClick={() => updateListingPrice(nft.tokenId)}
+                        className="bg-blue-500 text-white py-1 px-3 rounded w-full"
+                      >
+                        Simpan
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="bg-gray-500 text-white py-1 px-3 rounded w-full"
+                      >
+                        Batal
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setEditingId(nft.tokenId);
+                          setEditPrice(nft.price);
+                        }}
+                        className="bg-yellow-500 text-white py-1 px-3 rounded w-full"
+                      >
+                        Edit Harga
+                      </button>
+                      <button
+                        onClick={() => cancelListing(nft.tokenId)}
+                        className="bg-red-500 text-white py-1 px-3 rounded w-full"
+                      >
+                        Batalkan Penjualan
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           ))
         ) : (
           <p className="col-span-full text-center text-gray-500">
-            Belum ada NFT yang dijual.
+            Belum ada NFT yang dijual oleh Anda.
           </p>
         )}
       </div>

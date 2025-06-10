@@ -2,21 +2,24 @@ import React from "react";
 
 export default function NFTCard({ nft, onBuy }) {
   return (
-    <div className="max-w-sm rounded-xl shadow-lg overflow-hidden border border-gray-200 hover:shadow-2xl transition">
-      <img src={nft.image} alt={nft.name} className="w-full h-64 object-cover" />
-      <div className="p-4">
-        <h2 className="text-xl font-bold">{nft.name}</h2>
-        <p className="text-sm text-gray-500">{nft.description}</p>
-        <p className="mt-2 text-lg font-semibold text-blue-600">{nft.price} ETH</p>
-        {onBuy && (
-          <button
-            className="mt-3 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded"
-            onClick={() => onBuy(nft)}
-          >
-            Beli NFT
-          </button>
-        )}
-      </div>
+    <div className="border rounded-lg p-4 shadow-md">
+      <img
+        src={nft.image}
+        alt={nft.name}
+        className="w-full h-48 object-cover mb-2 rounded"
+      />
+      <h3 className="font-bold">{nft.name}</h3>
+      <p className="text-sm text-gray-600 mb-1">{nft.description}</p>
+      <p className="font-semibold">{nft.price} ETH</p>
+
+      {onBuy && (
+        <button
+          onClick={onBuy}
+          className="mt-2 bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded w-full"
+        >
+          Beli NFT
+        </button>
+      )}
     </div>
   );
 }

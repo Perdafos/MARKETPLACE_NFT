@@ -20,12 +20,7 @@ contract NFTMarketplace is ERC721URIStorage {
         address indexed owner,
         string tokenURI
     );
-    event NFTBought(
-        uint256 indexed tokenId,
-        address indexed buyer,
-        address indexed seller,
-        uint256 price
-    );
+    event NFTBought(uint256 indexed tokenId, address indexed buyer, address seller, uint256 price);
 
     constructor() ERC721("DafaNFT", "DNFT") {}
 
